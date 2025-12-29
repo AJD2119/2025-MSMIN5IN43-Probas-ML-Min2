@@ -44,18 +44,26 @@
 </main>
 
 <script>
-    // Graphique Hawk-Dove
+    // Graphique Hawk-Dove avec Grudges en jaune
     const ctx1 = document.getElementById('hawkDoveChart').getContext('2d');
     new Chart(ctx1, {
         type: 'line',
         data: {
             labels: [1,2,3,4,5,6,7],
             datasets: [
-                {label:'Hawks', data:[10,12,11,13,12,14,13], borderColor:'red', fill:false},
-                {label:'Doves', data:[10,9,10,8,9,7,8], borderColor:'blue', fill:false}
+                { label: 'Hawks', data: [10,12,11,13,12,14,13], borderColor: 'red', fill: false },
+                { label: 'Doves', data: [10,9,10,8,9,7,8], borderColor: 'blue', fill: false },
+                { label: 'Grudges', data: [5,5,6,5,6,5,4], borderColor: 'gold', fill: false } // Ajout en jaune
             ]
         },
-        options: {responsive:true, plugins:{legend:{position:'top'}}}
+        options: {
+            responsive: true,
+            plugins: { legend: { position: 'top' } },
+            scales: {
+                x: { title: { display: true, text: 'Jour' } },
+                y: { title: { display: true, text: 'Population' } }
+            }
+        }
     });
 
     // Graphique Rock-Paper-Scissors
@@ -65,12 +73,12 @@
         data: {
             labels: [1,2,3,4,5,6,7],
             datasets: [
-                {label:'Rock', data:[5,6,5,7,6,5,6], borderColor:'#666', fill:false},
-                {label:'Paper', data:[5,4,6,5,5,6,5], borderColor:'#999', fill:false},
-                {label:'Scissors', data:[5,5,5,4,5,5,5], borderColor:'#333', fill:false}
+                { label: 'Rock', data: [5,6,5,7,6,5,6], borderColor: '#666', fill: false },
+                { label: 'Paper', data: [5,4,6,5,5,6,5], borderColor: '#999', fill: false },
+                { label: 'Scissors', data: [5,5,5,4,5,5,5], borderColor: '#333', fill: false }
             ]
         },
-        options: {responsive:true, plugins:{legend:{position:'top'}}}
+        options: { responsive: true, plugins: { legend: { position: 'top' } } }
     });
 </script>
 

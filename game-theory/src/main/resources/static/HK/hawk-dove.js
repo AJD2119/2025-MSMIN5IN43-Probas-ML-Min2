@@ -1,339 +1,447 @@
-const boardCanvas = document.getElementById('board');
-const ctx = boardCanvas.getContext('2d');
-const chartCanvas = document.getElementById('chart');
+/*********************************************************
+ * ESPÈCES
+ *********************************************************/
+const Species = Object.freeze({
+  HAWK: "HAWK",
+  DOVE: "DOVE",
+  GRUDGE: "GRUDGE"
+});
 
+/*********************************************************
+ * CANVAS / DOM
+ *********************************************************/
+const board = document.getElementById("board");
+const ctx = board.getContext("2d");
+const chartCanvas = document.getElementById("chart");
+
+const hawksSlider = document.getElementById("hawksSlider");
+const dovesSlider = document.getElementById("dovesSlider");
+const grudgeSlider = document.getElementById("grudgeSlider");
+const hawksVal = document.getElementById("hawksVal");
+const dovesVal = document.getElementById("dovesVal");
+const grudgeVal = document.getElementById("grudgeVal");
+
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+const resetBtn = document.getElementById("resetBtn");
+
+/*********************************************************
+ * CHART
+ *********************************************************/
 const chart = new Chart(chartCanvas, {
-  type: 'line',
+  type: "line",
   data: {
     labels: [],
     datasets: [
-      { label: 'Hawks', borderColor: 'red', data: [] },
-      { label: 'Doves', borderColor: 'blue', data: [] }
+      { label: "Hawks", borderColor: "red", data: [] },
+      { label: "Doves", borderColor: "blue", data: [] },
+      { label: "Grudges", borderColor: "gold", data: [] }
     ]
   },
   options: {
     responsive: false,
-    plugins: { legend: { position: 'top' } },
+    plugins: {
+      legend: { position: "top" }
+    },
     scales: {
-      x: { title: { display: true, text: 'Day' } },
-      y: { title: { display: true, text: 'Population' } }
+      x: { title: { display: true, text: "Day" } },
+      y: { title: { display: true, text: "Population" } }
     }
   }
 });
 
-let creatures = [], foods = [], day = 0, animating = false, intervalId = null, nextCreatureId = 0;
-const radius = 280, center = { x: 300, y: 300 };
+/*********************************************************
+ * ÉTAT GLOBAL
+ *********************************************************/
+const center = { x: 300, y: 300 };
+const perimeterRadius = 280;
 
-const hawksSlider = document.getElementById('hawksSlider');
-const dovesSlider = document.getElementById('dovesSlider');
-const hawksVal = document.getElementById('hawksVal');
-const dovesVal = document.getElementById('dovesVal');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const resetBtn = document.getElementById('resetBtn');
+let creatures = [];
+let foods = [];
+let day = 0;
+let loop = null;
+let nextId = 0;
+let animating = false;
 
-hawksSlider.oninput = () => { hawksVal.textContent = hawksSlider.value; resetCreaturesAndChart(); };
-dovesSlider.oninput = () => { dovesVal.textContent = dovesSlider.value; resetCreaturesAndChart(); };
+/*********************************************************
+ * UTILITAIRE
+ *********************************************************/
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-// ---------------------------
-// INITIALISATION DES CREATURES
-// ---------------------------
-function initCreatures(hawks, doves) {
+function count(species) {
+  return creatures.filter(c => c.species === species).length;
+}
+
+/*********************************************************
+ * CRÉATURE
+ *********************************************************/
+function createCreature(species, angle) {
+  const x = center.x + perimeterRadius * Math.cos(angle);
+  const y = center.y + perimeterRadius * Math.sin(angle);
+  return {
+    id: nextId++,
+    species,
+    angle,
+    x, y,
+    startX: x,
+    startY: y,
+    target: null,
+    food: 0,
+    hawksMemory: species === Species.GRUDGE ? new Set() : null
+  };
+}
+
+/*********************************************************
+ * NOURRITURE — 3 CERCLES / 4–6–8 PAIRES
+ *********************************************************/
+function generateFoodPairs() {
+  foods = [];
+  const config = [
+    { r: 100, pairs: 4 },
+    { r: 160, pairs: 6 },
+    { r: 220, pairs: 8 }
+  ];
+  const offset = 10; // décalage perpendiculaire pour 2 boules
+
+  config.forEach(({ r, pairs }) => {
+    for (let i = 0; i < pairs; i++) {
+      const a = (2 * Math.PI * i) / pairs;
+      const cx = center.x + r * Math.cos(a);
+      const cy = center.y + r * Math.sin(a);
+
+      // vecteur perpendiculaire au rayon
+      const dirX = cx - center.x;
+      const dirY = cy - center.y;
+      const dist = Math.hypot(dirX, dirY);
+      const perpX = -dirY / dist;
+      const perpY = dirX / dist;
+
+      foods.push({
+        assigned: [],
+        eaten: false,
+        r,
+        cx,
+        cy,
+        items: [
+          { x: cx + offset * perpX, y: cy + offset * perpY, eaten: false },
+          { x: cx - offset * perpX, y: cy - offset * perpY, eaten: false }
+        ]
+      });
+    }
+  });
+
+  const max = foods.length * 2;
+  hawksSlider.max = dovesSlider.max = grudgeSlider.max = max;
+}
+
+/*********************************************************
+ * INITIALISATION
+ *********************************************************/
+function initCreatures(h, d, g) {
   creatures = [];
-  const total = parseInt(hawks) + parseInt(doves);
+  nextId = 0;
+  day = 0;
+
+  generateFoodPairs();
+
+  const total = h + d + g;
   for (let i = 0; i < total; i++) {
     const angle = (2 * Math.PI * i) / total;
-    const type = i < hawks ? "HAWK" : "DOVE";
-    creatures.push({
-      id: nextCreatureId++,
-      type,
-      angle,
-      x: center.x + radius * Math.cos(angle),
-      y: center.y + radius * Math.sin(angle),
-      startX: center.x + radius * Math.cos(angle),
-      startY: center.y + radius * Math.sin(angle),
-      target: null,
-      state: "atPerimeter",
-      food: 0,
-      alpha: 1
-    });
+    let s = i < h ? Species.HAWK : i < h + d ? Species.DOVE : Species.GRUDGE;
+    creatures.push(createCreature(s, angle));
   }
+
+  resetChart();
   draw();
 }
 
-function resetCreaturesAndChart() {
-  day = 0;
-  generateFoodPairsStructured(); // génère nourriture et ajuste sliders
-  initCreatures(hawksSlider.value, dovesSlider.value);
-  chart.data.labels = [day];
-  chart.data.datasets[0].data = [creatures.filter(c => c.type === "HAWK").length];
-  chart.data.datasets[1].data = [creatures.filter(c => c.type === "DOVE").length];
-  chart.update();
-}
-
-// ---------------------------
-// DESSIN
-// ---------------------------
+/*********************************************************
+ * DESSIN
+ *********************************************************/
 function draw() {
-  ctx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
+  ctx.clearRect(0, 0, board.width, board.height);
+
+  // Cercle
   ctx.beginPath();
-  ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI);
+  ctx.arc(center.x, center.y, perimeterRadius, 0, 2 * Math.PI);
   ctx.stroke();
 
-  foods.forEach(pair => {
-    pair.forEach(f => {
+  // Nourriture
+  foods.forEach(p => {
+    if (p.eaten) return;
+    p.items.forEach(f => {
       if (!f.eaten) {
         ctx.beginPath();
-        ctx.arc(f.x, f.y, 7, 0, 2 * Math.PI);
-        ctx.fillStyle = 'green';
+        ctx.arc(f.x, f.y, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = "green";
         ctx.fill();
       }
     });
   });
 
+  // Créatures
   creatures.forEach(c => {
     ctx.beginPath();
     ctx.arc(c.x, c.y, 8, 0, 2 * Math.PI);
-    ctx.fillStyle = c.type === "HAWK" ? `rgba(255,0,0,${c.alpha})` : `rgba(0,0,255,${c.alpha})`;
+    ctx.fillStyle =
+        c.species === Species.HAWK ? "red" :
+            c.species === Species.DOVE ? "blue" : "gold";
     ctx.fill();
   });
 }
 
-// ---------------------------
-// MOUVEMENT
-// ---------------------------
-function moveTowards(obj, target, speed) {
-  const dx = target.x - obj.x, dy = target.y - obj.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < speed) { obj.x = target.x; obj.y = target.y; return true; }
-  obj.x += dx / dist * speed;
-  obj.y += dy / dist * speed;
-  return false;
-}
+/*********************************************************
+ * ASSIGNATION AUX PAIRES (sur le rayon centre → paire)
+ *********************************************************/
+function assignTargets() {
+  foods.forEach(p => p.assigned = []);
+  const shuffled = [...creatures].sort(() => Math.random() - 0.5);
 
-// ---------------------------
-// NOURRITURE & MAX CREATURES
-// ---------------------------
-function generateFoodPairsStructured() {
-  foods = [];
-  const circles = [
-    { radius: 100, pairs: 4 },
-    { radius: 150, pairs: 6 },
-    { radius: 200, pairs: 8 }
-  ];
-  const offset = 10;
-  let totalPairs = 0;
+  shuffled.forEach(c => {
+    const free = foods.filter(p => p.assigned.length < 2 && !p.eaten);
+    if (!free.length) return;
 
-  circles.forEach(circle => {
-    const { radius, pairs } = circle;
-    totalPairs += pairs;
-    for (let i = 0; i < pairs; i++) {
-      const angle = (2 * Math.PI / pairs) * i;
-      const xCenter = center.x + radius * Math.cos(angle);
-      const yCenter = center.y + radius * Math.sin(angle);
-      const x1 = xCenter + offset * Math.cos(angle + Math.PI / 2);
-      const y1 = yCenter + offset * Math.sin(angle + Math.PI / 2);
-      const x2 = xCenter + offset * Math.cos(angle - Math.PI / 2);
-      const y2 = yCenter + offset * Math.sin(angle - Math.PI / 2);
-      foods.push([{ x: x1, y: y1, eaten: false, angle, r: radius }, { x: x2, y: y2, eaten: false, angle, r: radius }]);
-    }
-  });
+    const p = free[Math.floor(Math.random() * free.length)];
+    p.assigned.push(c);
 
-  // --- Ajuster dynamiquement les sliders ---
-  const maxCreatures = totalPairs * 2;
-  hawksSlider.max = maxCreatures;
-  dovesSlider.max = maxCreatures;
-  if (hawksSlider.value > maxCreatures) hawksSlider.value = maxCreatures;
-  if (dovesSlider.value > maxCreatures) dovesSlider.value = maxCreatures;
-  hawksVal.textContent = hawksSlider.value;
-  dovesVal.textContent = dovesSlider.value;
-}
+    // vecteur radial centre → centre de la paire
+    const dx = p.cx - center.x;
+    const dy = p.cy - center.y;
+    const dist = Math.hypot(dx, dy);
+    const dirX = dx / dist;
+    const dirY = dy / dist;
 
-function assignTargetsToFoodStructured() {
-  // On commence par mélanger les créatures
-  const shuffledCreatures = creatures.slice().sort(() => Math.random() - 0.5);
+    // position sur le rayon + sideOffset
+    const radialOffset = p.assigned.length === 1 ? -16 : 16; // première devant, deuxième derrière
+    const tx = center.x + dirX * (p.r + radialOffset);
+    const ty = center.y + dirY * (p.r + radialOffset);
 
-  // Réinitialiser la capacité de chaque paire (max 2)
-  foods.forEach(pair => pair.assignedCount = 0);
-
-  shuffledCreatures.forEach(c => {
-    // Trouver une paire qui n'est pas complète
-    const availablePairs = foods.filter(pair => pair.assignedCount < 2);
-    if (availablePairs.length === 0) {
-      console.warn("Pas assez de paires pour toutes les créatures !");
-      return;
-    }
-
-    // Choisir une paire aléatoire parmi celles disponibles
-    const pair = availablePairs[Math.floor(Math.random() * availablePairs.length)];
-    pair.assignedCount++;
-
-    // Déterminer l’offset de la créature dans la paire
-    const offset = pair.assignedCount === 1 ? -15 : 15;
-    const xCenter = (pair[0].x + pair[1].x) / 2;
-    const yCenter = (pair[0].y + pair[1].y) / 2;
-    const angle = Math.atan2(center.y - yCenter, center.x - xCenter);
-    const radiusAdjust = offset > 0 ? -5 : 5;
-
-    c.target = {
-      x: xCenter + (offset + radiusAdjust) * Math.cos(angle),
-      y: yCenter + (offset + radiusAdjust) * Math.sin(angle),
-      pair,
-      offset
-    };
-    c.state = "toFood";
-    c.food = 0;
+    c.target = { x: tx, y: ty, pair: p };
   });
 }
 
-function eatFood(creature) {
-  const pair = creature.target.pair;
-  if (pair.every(f => f.eaten)) return;
-  const others = creatures.filter(c => c !== creature && c.target && c.target.pair === pair);
-  const other = others[0] || null;
-
-  let foodTaken = 0;
-  if (!other) foodTaken = 2;
-  else if (creature.type === "DOVE" && other.type === "DOVE") { foodTaken = 1; if (other) other.food = 1; }
-  else if (creature.type === "HAWK" && other.type === "HAWK") { foodTaken = 1; creature.food = 0; if (other) other.food = 0; }
-  else if (creature.type === "HAWK" && other.type === "DOVE") { foodTaken = 1.5; if (other) other.food = 0.5; }
-  else if (creature.type === "DOVE" && other.type === "HAWK") { foodTaken = 0.5; if (other) other.food = 1.5; }
-
-  creature.food = foodTaken;
-  pair.forEach(f => f.eaten = true);
-}
-
-function applyMortReproduction() {
-  let survivors = [], children = [];
-  creatures.forEach(c => {
-    let survives = false, reproduce = false;
-
-    if (c.food >= 2) { survives = true; reproduce = true; }
-    else if (c.food >= 1.5) { survives = true; reproduce = Math.random() < 0.5; }
-    else if (c.food >= 1) survives = true;
-    else if (c.food >= 0.5) reproduce = Math.random() < 0.5;
-
-    if (survives) survivors.push(c);
-    if (reproduce) {
-      children.push({
-        ...c,
-        id: nextCreatureId++,
-        alpha: 1,
-        x: c.x,
-        y: c.y,
-        startX: c.x,
-        startY: c.y
-      });
-    }
-  });
-  return [...survivors, ...children];
-}
-
-// ---------------------------
-// ANIMATION
-// ---------------------------
-async function animateStep(state) {
+/*********************************************************
+ * DÉPLACEMENT ANIMÉ
+ *********************************************************/
+function animateMove(speed = 4) {
   return new Promise(resolve => {
-    const speed = 4;
-    function loop() {
+    function step() {
       let done = true;
       creatures.forEach(c => {
-        if (c.state === state && c.target) {
-          if (!moveTowards(c, c.target, speed)) done = false;
+        if (!c.target) return;
+        const dx = c.target.x - c.x;
+        const dy = c.target.y - c.y;
+        const d = Math.hypot(dx, dy);
+        if (d > speed) {
+          c.x += dx / d * speed;
+          c.y += dy / d * speed;
+          done = false;
         }
       });
       draw();
-      if (!done) requestAnimationFrame(loop);
-      else resolve();
+      done ? resolve() : requestAnimationFrame(step);
     }
-    loop();
+    step();
   });
 }
 
-// ---------------------------
-// FIN DE JOUR
-// ---------------------------
-async function animateEndOfDay(newCreatures) {
-  const total = newCreatures.length;
-  const hawks = newCreatures.filter(c => c.type === "HAWK");
-  const doves = newCreatures.filter(c => c.type === "DOVE");
-  let positions = [];
-  const stepAngle = 2 * Math.PI / total;
-  let angleCursor = 0;
+/*********************************************************
+ * COMPORTEMENT ALIMENTAIRE
+ *********************************************************/
+function behavesAsHawk(c, other) {
+  if (c.species === Species.HAWK) return true;
+  if (c.species === Species.DOVE) return false;
 
-  function assignEquidistant(group) {
-    group.forEach(c => {
-      c.targetAngle = angleCursor;
-      c.angle = Math.atan2(c.y - center.y, c.x - center.x);
-      c.alpha = 1;
-      positions.push(c);
-      angleCursor += stepAngle;
-    });
+  // Pour une Grudge, vérifier que le Hawk est vivant avant de considérer qu'il se comporte comme un Hawk
+  if (c.species === Species.GRUDGE && other) {
+    // Filtrer la mémoire pour ne garder que les Hawks encore présents
+    c.hawksMemory = new Set([...c.hawksMemory].filter(id => creatures.some(h => h.id === id)));
+    return c.hawksMemory.has(other.id);
   }
 
-  assignEquidistant(hawks);
-  assignEquidistant(doves);
-  creatures = newCreatures.slice();
+  return false;
+}
+
+function eatPair(pair) {
+  if (pair.eaten) return;
+  const assigned = pair.assigned;
+  if (assigned.length === 0) return;
+
+  if (assigned.length === 1) {
+    assigned[0].food += 2;
+  } else if (assigned.length === 2) {
+    const [a, b] = assigned;
+    const ha = behavesAsHawk(a, b);
+    const hb = behavesAsHawk(b, a);
+
+    //repartition de la nourriture
+    if (ha && hb) {
+      // Hawk vs Hawk ou Grudge déjà rencontré → 0:0
+      a.food = 0;
+      b.food = 0;
+    } else if (ha && !hb) {
+      // a = Hawk, b = Dove/Grudge
+      a.food = 1.5;
+      b.food = 0.5;
+      if (b.species === Species.GRUDGE && !b.hawksMemory.has(a.id)) b.hawksMemory.add(a.id);
+    } else if (!ha && hb) {
+      // b = Hawk, a = Dove/Grudge
+      a.food = 0.5;
+      b.food = 1.5;
+      if (a.species === Species.GRUDGE && !a.hawksMemory.has(b.id)) a.hawksMemory.add(b.id);
+    } else {
+      // Dove vs Dove ou Grudge vs Dove → 1:1
+      a.food = 1;
+      b.food = 1;
+    }
+  }
+
+  // Marquer les items comme mangés
+  pair.items.forEach(f => f.eaten = true);
+  pair.eaten = true;
+}
+
+/*********************************************************
+ * FIN DE JOURNÉE — GLISSEMENT SUR LE CERCLE
+ *********************************************************/
+async function animateReposition(next) {
+  const step = (2 * Math.PI) / next.length;
+  next.forEach((c, i) => c.targetAngle = i * step);
 
   return new Promise(resolve => {
-    function loop() {
+    function stepAnim() {
       let done = true;
-      creatures.forEach(c => {
+      next.forEach(c => {
         let diff = c.targetAngle - c.angle;
-        if (diff > Math.PI) diff -= 2 * Math.PI;
-        else if (diff < -Math.PI) diff += 2 * Math.PI;
-        if (Math.abs(diff) > 0.001) { c.angle += diff * 0.2; done = false; }
-        c.x = center.x + radius * Math.cos(c.angle);
-        c.y = center.y + radius * Math.sin(c.angle);
+        if (Math.abs(diff) > 0.01) {
+          c.angle += diff * 0.15;
+          done = false;
+        }
+        c.x = center.x + perimeterRadius * Math.cos(c.angle);
+        c.y = center.y + perimeterRadius * Math.sin(c.angle);
       });
       draw();
-      if (!done) requestAnimationFrame(loop);
-      else {
-        creatures.forEach(c => { c.startX = c.x; c.startY = c.y; c.angle = c.targetAngle; });
+      if (done) {
+        // Mettre à jour la position de départ après réorganisation finale
+        next.forEach(c => {
+          c.startX = c.x;
+          c.startY = c.y;
+        });
         resolve();
-      }
+      } else requestAnimationFrame(stepAnim);
     }
-    loop();
+    stepAnim();
   });
 }
 
-// ---------------------------
-// CHART & STEP DAY
-// ---------------------------
-function updateChart() {
-  chart.data.labels.push(day);
-  chart.data.datasets[0].data.push(creatures.filter(c => c.type === "HAWK").length);
-  chart.data.datasets[1].data.push(creatures.filter(c => c.type === "DOVE").length);
-  chart.update();
+/*********************************************************
+ * MORT & REPRODUCTION
+ *********************************************************/
+function applyMortalityAndReproduction() {
+  const next = [];
+  creatures.forEach(c => {
+    let survives = false;
+    let reproduce = false;
+
+    //0=mort, 0.5=50% de chance de survie, 1=survie, 1.5=survie+50% de chance de repro, 2=repro
+    if (c.food === 0) survives = false;
+    else if (c.food === 0.5) survives = Math.random() < 0.5;
+    else if (c.food === 1) survives = true;
+    else if (c.food === 1.5) { survives = true; reproduce = Math.random() < 0.5; }
+    else if (c.food >= 2) { survives = true; reproduce = true; }
+
+    if (survives) next.push(c);
+    if (reproduce) next.push(createCreature(c.species, c.angle));
+  });
+  return next;
 }
 
+/*********************************************************
+ * STEP DAY COMPLET AVEC PAUSE SUR NOURRITURE
+ *********************************************************/
 async function stepDay() {
   if (animating) return;
   animating = true;
   day++;
 
-  generateFoodPairsStructured();
-  assignTargetsToFoodStructured();
-  await animateStep("toFood");
-  creatures.forEach(c => { if (c.state === "toFood") eatFood(c); });
-  creatures.forEach(c => { c.target = { x: c.startX, y: c.startY }; c.state = "toPerimeter"; });
-  await animateStep("toPerimeter");
+  // Remise à zéro nourriture et régénération
+  creatures.forEach(c => c.food = 0);
+  generateFoodPairs();
+  assignTargets();
 
-  const newCreatures = applyMortReproduction();
-  await animateEndOfDay(newCreatures);
+  // Animation vers nourriture
+  await animateMove();
 
+  // Pause 1 seconde devant chaque paire
+  await wait(1000);
+
+  // Manger
+  foods.forEach(eatPair);
+
+  // Retour à leur position initiale
+  creatures.forEach(c => c.target = { x: c.startX, y: c.startY });
+  await animateMove();
+
+  // Mort & reproduction
+  creatures = applyMortalityAndReproduction();
+
+  // Réorganisation finale
+  await animateReposition(creatures);
+
+  // Mise à jour du graphe
   updateChart();
+
+  // **Arrêter la simulation si plus aucune créature**
+  if (creatures.length === 0) {
+    clearInterval(loop);
+    loop = null;
+
+    animating = false;
+    return;
+  }
+
   animating = false;
 }
 
-// ---------------------------
-// BOUTONS
-// ---------------------------
-startBtn.onclick = () => { if (!intervalId) intervalId = setInterval(() => stepDay(), 3000); };
-stopBtn.onclick = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } };
-resetBtn.onclick = () => { if (intervalId) { clearInterval(intervalId); intervalId = null; } resetCreaturesAndChart(); };
+/*********************************************************
+ * CHART
+ *********************************************************/
+function resetChart() {
+  chart.data.labels = [0];
+  chart.data.datasets[0].data = [count(Species.HAWK)];
+  chart.data.datasets[1].data = [count(Species.DOVE)];
+  chart.data.datasets[2].data = [count(Species.GRUDGE)];
+  chart.update();
+}
 
-// ---------------------------
-// INIT
-// ---------------------------
-window.onload = () => resetCreaturesAndChart();
+function updateChart() {
+  chart.data.labels.push(day);
+  chart.data.datasets[0].data.push(count(Species.HAWK));
+  chart.data.datasets[1].data.push(count(Species.DOVE));
+  chart.data.datasets[2].data.push(count(Species.GRUDGE));
+  chart.update();
+}
+
+/*********************************************************
+ * SLIDERS & BOUTONS
+ *********************************************************/
+function syncSliders() {
+  hawksVal.textContent = hawksSlider.value.toString().padStart(2, '0');
+  dovesVal.textContent = dovesSlider.value.toString().padStart(2, '0');
+  grudgeVal.textContent = grudgeSlider.value.toString().padStart(2, '0');
+
+  initCreatures(+hawksSlider.value, +dovesSlider.value, +grudgeSlider.value);
+}
+
+hawksSlider.oninput = dovesSlider.oninput = grudgeSlider.oninput = syncSliders;
+
+startBtn.onclick = () => loop ??= setInterval(stepDay, 3000);
+stopBtn.onclick = () => { clearInterval(loop); loop = null; };
+resetBtn.onclick = () => { stopBtn.onclick(); syncSliders(); };
+
+/*********************************************************
+ * INIT
+ *********************************************************/
+window.onload = syncSliders;

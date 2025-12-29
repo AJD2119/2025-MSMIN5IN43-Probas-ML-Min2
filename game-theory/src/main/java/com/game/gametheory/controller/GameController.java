@@ -1,6 +1,7 @@
 package com.game.gametheory.controller;
 
 import com.game.gametheory.engine.*;
+import com.game.gametheory.model.*;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -8,13 +9,31 @@ import org.springframework.web.bind.annotation.*;
 public class GameController {
   private GameEngine engine;
 
+  /**
+   * Démarre une nouvelle partie avec hawks, doves et grudges.
+   *
+   * @param hawks  nombre de Hawks
+   * @param doves  nombre de Doves
+   * @param grudges nombre de Grudges
+   */
   @PostMapping("/start")
-  public void start(@RequestParam int hawks,@RequestParam int doves){
-    engine=new GameEngine(hawks,doves);
+  public void start(
+          @RequestParam int hawks,
+          @RequestParam int doves,
+          @RequestParam(defaultValue = "0") int grudges) {
+    engine = new GameEngine(hawks, doves, grudges);
   }
 
+  /**
+   * Avance la simulation d'un jour.
+   *
+   * @return snapshot de l'état du jeu
+   */
   @GetMapping("/step")
-  public GameSnapshot step(){
+  public GameSnapshot step() {
+    if (engine == null) {
+      throw new IllegalStateException("La partie n'a pas été démarrée. Utilisez /start.");
+    }
     return engine.nextDay();
   }
 }

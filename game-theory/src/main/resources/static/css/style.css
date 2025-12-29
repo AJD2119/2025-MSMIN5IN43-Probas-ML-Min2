@@ -125,6 +125,13 @@ body {
     min-width: 200px;
 }
 
+#controls span {
+    display: inline-block;
+    width: 2ch;       /* largeur fixe pour deux chiffres */
+    text-align: right; /* alignement à droite pour les nombres */
+    font-family: monospace; /* optionnel : chiffres alignés */
+}
+
 label {
     margin-bottom: 10px;
 }

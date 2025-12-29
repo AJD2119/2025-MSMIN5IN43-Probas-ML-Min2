@@ -1,2 +1,7 @@
 package com.game.gametheory.model;
-public enum Species { HAWK, DOVE }
+
+public enum Species {
+    HAWK,
+    DOVE,
+    GRUDGE
+}

@@ -28,19 +28,24 @@
     <!-- Contrôles -->
     <div id="controls">
         <h2>Simulation Controls</h2>
-        <label>Hawks: <span id="hawksVal">10</span>
+        <label>Hawks:
+            <span id="hawksVal">10</span>
             <input type="range" id="hawksSlider" min="0" max="50" value="10">
         </label>
-        <label>Doves: <span id="dovesVal">10</span>
+        <label>Doves:
+            <span id="dovesVal">10</span>
             <input type="range" id="dovesSlider" min="0" max="50" value="10">
+        </label>
+        <label>Grudges:
+            <span id="grudgeVal">05</span>
+            <input type="range" id="grudgeSlider" min="0" max="50" value="10">
         </label>
         <button id="startBtn">Start</button>
         <button id="stopBtn">Stop</button>
         <button id="resetBtn">Reset</button>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="/HK/hawk-dove.js"></script>
 
 </body>
