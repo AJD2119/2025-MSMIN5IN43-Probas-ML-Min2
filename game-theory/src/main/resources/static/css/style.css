@@ -68,8 +68,8 @@ body {
 
 .card.full-width {
     width: 100%;
-    max-width: 1600px; /* assez large pour tableau complet */
-    margin: 0 auto;    /* centrer horizontalement */
+    max-width: 1600px;
+    margin: 0 auto;
 }
 
 .card h2 {
@@ -99,7 +99,7 @@ table {
     width: 100%;
     border-collapse: collapse;
     font-size: 1.3em;
-    margin: 0 auto; /* centrer le tableau */
+    margin: 0 auto;
 }
 
 th, td {
@@ -124,8 +124,8 @@ td br {
     display: flex;
     flex: 1 1 auto;
     padding: 10px;
-    flex-wrap: wrap; /* pour adaptation responsive */
-    justify-content: center; /* centre les contenus horizontalement */
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 20px;
 }
 
@@ -136,7 +136,7 @@ td br {
     align-items: flex-start;
     justify-content: flex-start;
     gap: 10px;
-    flex-wrap: wrap; /* responsive si petit écran */
+    flex-wrap: wrap;
 }
 
 #left-panel canvas {
