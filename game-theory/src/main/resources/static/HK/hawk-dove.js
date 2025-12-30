@@ -102,7 +102,7 @@ function createCreature(species, angle) {
 }
 
 /*********************************************************
- * NOURRITURE — 3 CERCLES / 4–6–8 PAIRES
+ * NOURRITURE — 3 CERCLES / 4–6–8 PAIRES = 36 total
  *********************************************************/
 function generateFoodPairs() {
   foods = [];
@@ -206,7 +206,7 @@ function draw() {
 }
 
 /*********************************************************
- * ASSIGNATION AUX PAIRES
+ * ASSIGNATION DES CREATURES AUX PAIRES DE NOURRITURE
  *********************************************************/
 function assignTargets() {
   foods.forEach(p => p.assigned = []);
@@ -234,7 +234,7 @@ function assignTargets() {
 }
 
 /*********************************************************
- * DÉPLACEMENT ANIMÉ
+ * DEBUT DE JOURNEE
  *********************************************************/
 function animateMove(speed = 4) {
   return new Promise(resolve => {
@@ -259,7 +259,7 @@ function animateMove(speed = 4) {
 }
 
 /*********************************************************
- * COMPORTEMENT ALIMENTAIRE
+ * COMPORTEMENT DE PARTAGE
  *********************************************************/
 function behavesAsHawk(c, other) {
   if (!other) return false;
@@ -284,9 +284,6 @@ function behavesAsHawk(c, other) {
   return false;
 }
 
-/*********************************************************
- * MANGER — mise à jour mémoire Grudge/Detective
- *********************************************************/
 function eatPair(pair) {
   if (pair.eaten) return;
   const assigned = pair.assigned;
@@ -319,57 +316,7 @@ function eatPair(pair) {
 }
 
 /*********************************************************
- * FIN DE JOURNÉE — GLISSEMENT SUR LE CERCLE
- *********************************************************/
-async function animateReposition(next) {
-  const step = (2 * Math.PI) / next.length;
-  next.forEach((c, i) => c.targetAngle = i * step);
-
-  return new Promise(resolve => {
-    function stepAnim() {
-      let done = true;
-      next.forEach(c => {
-        let diff = c.targetAngle - c.angle;
-        if (Math.abs(diff) > 0.01) {
-          c.angle += diff * 0.15;
-          done = false;
-        }
-        c.x = center.x + perimeterRadius * Math.cos(c.angle);
-        c.y = center.y + perimeterRadius * Math.sin(c.angle);
-      });
-      draw();
-      if (done) {
-        next.forEach(c => { c.startX = c.x; c.startY = c.y; });
-        resolve();
-      } else requestAnimationFrame(stepAnim);
-    }
-    stepAnim();
-  });
-}
-
-/*********************************************************
- * MORT & REPRODUCTION
- *********************************************************/
-function applyMortalityAndReproduction() {
-  const next = [];
-  creatures.forEach(c => {
-    let survives = false;
-    let reproduce = false;
-
-    if (c.food === 0) survives = false;
-    else if (c.food === 0.5) survives = Math.random() < 0.5;
-    else if (c.food === 1) survives = true;
-    else if (c.food === 1.5) { survives = true; reproduce = Math.random() < 0.5; }
-    else if (c.food >= 2) { survives = true; reproduce = true; }
-
-    if (survives) next.push(c);
-    if (reproduce) next.push(createCreature(c.species, c.angle));
-  });
-  return next;
-}
-
-/*********************************************************
- * STEP DAY
+ * FIN DE JOURNEE
  *********************************************************/
 async function stepDay() {
   if (animating) return;
@@ -401,6 +348,56 @@ async function stepDay() {
   }
 
   animating = false;
+}
+
+/*********************************************************
+ * Mort & Reproduction
+ *********************************************************/
+function applyMortalityAndReproduction() {
+  const next = [];
+  creatures.forEach(c => {
+    let survives = false;
+    let reproduce = false;
+
+    if (c.food === 0) survives = false;
+    else if (c.food === 0.5) survives = Math.random() < 0.5;
+    else if (c.food === 1) survives = true;
+    else if (c.food === 1.5) { survives = true; reproduce = Math.random() < 0.5; }
+    else if (c.food >= 2) { survives = true; reproduce = true; }
+
+    if (survives) next.push(c);
+    if (reproduce) next.push(createCreature(c.species, c.angle));
+  });
+  return next;
+}
+
+/*********************************************************
+ * Repositionnement autour du cercle
+ *********************************************************/
+async function animateReposition(next) {
+  const step = (2 * Math.PI) / next.length;
+  next.forEach((c, i) => c.targetAngle = i * step);
+
+  return new Promise(resolve => {
+    function stepAnim() {
+      let done = true;
+      next.forEach(c => {
+        let diff = c.targetAngle - c.angle;
+        if (Math.abs(diff) > 0.01) {
+          c.angle += diff * 0.15;
+          done = false;
+        }
+        c.x = center.x + perimeterRadius * Math.cos(c.angle);
+        c.y = center.y + perimeterRadius * Math.sin(c.angle);
+      });
+      draw();
+      if (done) {
+        next.forEach(c => { c.startX = c.x; c.startY = c.y; });
+        resolve();
+      } else requestAnimationFrame(stepAnim);
+    }
+    stepAnim();
+  });
 }
 
 /*********************************************************
@@ -443,6 +440,6 @@ stopBtn.onclick = () => { clearInterval(loop); loop = null; };
 resetBtn.onclick = () => { stopBtn.onclick(); syncSliders(); };
 
 /*********************************************************
- * INIT
+ * INITIALISATION
  *********************************************************/
 window.onload = syncSliders;
